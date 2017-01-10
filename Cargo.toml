@@ -1,0 +1,6 @@
+[package]
+name = "kalmanfilter"
+version = "0.1.0"
+authors = ["Phaiax <phaiax-git@invisibletower.de>"]
+
+[dependencies]
