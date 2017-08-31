@@ -1,0 +1,16 @@
+[package]
+name = "kalmanfilter"
+version = "0.1.0"
+authors = ["Phaiax <phaiax-git@invisibletower.de>"]
+description = "A (stochastic cloning) Kálmán filter."
+repository = "https://github.com/Phaiax/kalmanfilter"
+readme = "../README.md"
+keywords = ["kalman", "filter", "stochastic cloning"]
+license = "MIT"
+
+[dependencies]
+alga = "0.5"
+nalgebra = "0.13"
+num = "0.1.*"
+generic-array = "0.8"
+rand = "0.3"
