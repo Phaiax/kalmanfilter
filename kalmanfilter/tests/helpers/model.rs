@@ -1,29 +1,30 @@
 
-use na::DVector;
+use na::{DVector, DMatrix};
 use rand::distributions::{Normal, IndependentSample};
 use rand::thread_rng;
 
 use kalmanfilter::systems::continuous_to_discrete;
+use kalmanfilter::nt;
 
 use super::types::*;
 
 
 pub struct ContinuousLinearModelBuilder {
     pub vec_x_init : SystemState,
-    pub mat_a : SystemMatrix,
-    pub mat_b : InputMatrix,
-    pub vec_w : SystemNoise,
+    pub mat_a : ContinuousSystemMatrix,
+    pub mat_b : ContinuousInputMatrix,
+    pub vec_w : SystemNoiseVariances,
     pub mat_c : MeasurementMatrix,
-    pub vec_r : MeasurementNoise,
+    pub vec_r : MeasurementNoiseVariances,
 }
 
 pub struct ContinuousLinearModel {
     vec_x : SystemState,
-    mat_a : SystemMatrix,
-    mat_b : InputMatrix,
-    vec_w : SystemNoise, // will also be used to hold the drawn samples
+    mat_a : ContinuousSystemMatrix,
+    mat_b : ContinuousInputMatrix,
+    vec_w : SystemNoiseVariances, // will also be used to hold the drawn samples
     mat_c : MeasurementMatrix,
-    vec_r : MeasurementNoise, // will also be used to hold the drawn samples
+    vec_r : MeasurementNoiseVariances, // will also be used to hold the drawn samples
     num_inputs : usize,
     num_states : usize,
     system_noise_gen : Vec<Normal>,
@@ -70,16 +71,16 @@ impl ContinuousLinearModel {
             *n = gen.ind_sample(&mut thread_rng());
         }
 
-        self.vec_x += ( &self.mat_a * &self.vec_x + &self.mat_b * u + &self.vec_w ) * dt;
+        self.vec_x.0 += ( &self.mat_a.0 * &self.vec_x.0 + &self.mat_b.0 * &u.0 + &self.vec_w.0 ) * dt;
 
-        &self.mat_c * &self.vec_x + &self.vec_r
+        Measurements( &self.mat_c.0 * &self.vec_x.0 + &self.vec_r.0 )
     }
 
-    pub fn get_a(&self) -> &SystemMatrix {
+    pub fn get_system_matrix(&self) -> &ContinuousSystemMatrix {
         &self.mat_a
     }
 
-    pub fn get_b(&self) -> &InputMatrix {
+    pub fn get_input_matrix(&self) -> &ContinuousInputMatrix {
         &self.mat_b
     }
 
@@ -87,7 +88,7 @@ impl ContinuousLinearModel {
         &self.vec_x
     }
 
-    pub fn get_c(&self) -> &MeasurementMatrix {
+    pub fn get_measurement_matrix(&self) -> &MeasurementMatrix {
         &self.mat_c
     }
 
@@ -104,11 +105,11 @@ impl ContinuousLinearModel {
 
 pub struct DiscreteLinearModelBuilder {
     pub vec_x_init : SystemState,
-    pub mat_f : SystemMatrix,
-    pub mat_h : InputMatrix,
-    pub vec_w : SystemNoise,
+    pub mat_f : DiscreteSystemMatrix,
+    pub mat_h : DiscreteInputMatrix,
+    pub vec_w : SystemNoiseVariances,
     pub mat_c : MeasurementMatrix,
-    pub vec_r : MeasurementNoise,
+    pub vec_r : MeasurementNoiseVariances,
 }
 
 impl ContinuousLinearModelBuilder {
@@ -127,11 +128,11 @@ impl ContinuousLinearModelBuilder {
 
 pub struct DiscreteLinearModel {
     vec_x : SystemState,
-    mat_f : SystemMatrix,
-    mat_h : InputMatrix,
-    vec_w : SystemNoise, // will also be used to hold the drawn samples
+    mat_f : DiscreteSystemMatrix,
+    mat_h : DiscreteInputMatrix,
+    vec_w : SystemNoiseVariances, // will also be used to hold the drawn samples
     mat_c : MeasurementMatrix,
-    vec_r : MeasurementNoise, // will also be used to hold the drawn samples
+    vec_r : MeasurementNoiseVariances, // will also be used to hold the drawn samples
     num_inputs : usize,
     num_states : usize,
     system_noise_gen : Vec<Normal>,
@@ -186,16 +187,16 @@ impl DiscreteLinearModel {
             *n = gen.ind_sample(&mut thread_rng());
         }
 
-        self.vec_x = &self.mat_f * &self.vec_x + &self.mat_h * u + &self.vec_w;
+        self.vec_x.0 = &self.mat_f.0 * &self.vec_x.0 + &self.mat_h.0 * &u.0 + &self.vec_w.0;
 
-        &self.mat_c * &self.vec_x + &self.vec_r
+        Measurements( &self.mat_c.0 * &self.vec_x.0 + &self.vec_r.0 )
     }
 
-    pub fn get_f(&self) -> &SystemMatrix {
+    pub fn get_system_matrix(&self) -> &DiscreteSystemMatrix {
         &self.mat_f
     }
 
-    pub fn get_h(&self) -> &InputMatrix {
+    pub fn get_input_matrix(&self) -> &DiscreteInputMatrix {
         &self.mat_h
     }
 
@@ -203,7 +204,7 @@ impl DiscreteLinearModel {
         &self.vec_x
     }
 
-    pub fn get_c(&self) -> &MeasurementMatrix {
+    pub fn get_measurement_matrix(&self) -> &MeasurementMatrix {
         &self.mat_c
     }
 
@@ -219,46 +220,46 @@ impl DiscreteLinearModel {
 
 pub fn example_model_2states_regular_stable() -> ContinuousLinearModelBuilder {
     ContinuousLinearModelBuilder {
-        vec_x_init : SystemState::from_row_slice(2, &[
+        vec_x_init : nt::StateVector(DVector::from_row_slice(2, &[
                 0.,
                 0.,
-            ]),
+            ])),
         // has eigenvalues -3.5 and -1.5
-        mat_a : SystemMatrix::from_row_slice(2, 2, &[
+        mat_a : nt::ContinuousSystemMatrix(DMatrix::from_row_slice(2, 2, &[
                 -3., 1.5,
                 0.5, -2.,
-            ]),
-        mat_b : InputMatrix::from_row_slice(2, 1, &[
+            ])),
+        mat_b : nt::ContinuousInputMatrix(DMatrix::from_row_slice(2, 1, &[
                 1.,
                 0.,
-            ]),
-        vec_w : SystemNoise::from_row_slice(2, &[0., 0.,]),
-        mat_c : MeasurementMatrix::from_row_slice(1, 2, &[0., 2.,]),
-        vec_r : MeasurementNoise::from_row_slice(1, &[0.]),
+            ])),
+        vec_w : SystemNoiseVariances(DVector::from_row_slice(2, &[0., 0.,])),
+        mat_c : MeasurementMatrix(DMatrix::from_row_slice(1, 2, &[0., 2.,])),
+        vec_r : MeasurementNoiseVariances(DVector::from_row_slice(1, &[0.])),
         // mat_c : MeasurementMatrix::from_row_slice(2, 2, &[0., 2., 1., 0.]),
-        // vec_r : MeasurementNoise::from_row_slice(2, &[0., 0.]),
+        // vec_r : MeasurementNoiseVariances::from_row_slice(2, &[0., 0.]),
     }
 }
 
 pub fn example_model_2states_singular_stable() -> ContinuousLinearModelBuilder {
     ContinuousLinearModelBuilder {
-        vec_x_init : SystemState::from_row_slice(2, &[
+        vec_x_init : nt::StateVector(DVector::from_row_slice(2, &[
                 0.,
                 0.,
-            ]),
+            ])),
         // has eigenvalues -3.5 and -1.5
-        mat_a : SystemMatrix::from_row_slice(2, 2, &[
+        mat_a : nt::ContinuousSystemMatrix(DMatrix::from_row_slice(2, 2, &[
                 -3., 1.5,
                 1.5, -0.75,
-            ]),
-        mat_b : InputMatrix::from_row_slice(2, 1, &[
+            ])),
+        mat_b : nt::ContinuousInputMatrix(DMatrix::from_row_slice(2, 1, &[
                 1.,
                 0.,
-            ]),
-        vec_w : SystemNoise::from_row_slice(2, &[0., 0.,]),
-        mat_c : MeasurementMatrix::from_row_slice(1, 2, &[0., 2.,]),
-        vec_r : MeasurementNoise::from_row_slice(1, &[0.]),
+            ])),
+        vec_w : SystemNoiseVariances(DVector::from_row_slice(2, &[0., 0.,])),
+        mat_c : MeasurementMatrix(DMatrix::from_row_slice(1, 2, &[0., 2.,])),
+        vec_r : MeasurementNoiseVariances(DVector::from_row_slice(1, &[0.])),
         // mat_c : MeasurementMatrix::from_row_slice(2, 2, &[0., 2., 1., 0.]),
-        // vec_r : MeasurementNoise::from_row_slice(2, &[0., 0.]),
+        // vec_r : MeasurementNoiseVariances::from_row_slice(2, &[0., 0.]),
     }
 }

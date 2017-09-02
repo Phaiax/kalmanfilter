@@ -9,40 +9,11 @@ mod helpers;
 
 use helpers::types::*;
 use helpers::model::*;
-use kalmanfilter::{KalmanFilterBuilder, KalmanFilter};
+use kalmanfilter::kf::{KalmanFilterBuilder, KalmanFilter};
+use kalmanfilter::nt;
 
-/// # Modell
-///
-/// x = [ 2  1 ] x  + [ 1 ] u + w
-///     [ 3  0 ]      [ 0 ]
-///
-/// # Measurement
-///
-/// z = [ 0 2 ] x + r
-///
-pub fn new_model_1() -> DiscreteLinearModel {
-    DiscreteLinearModelBuilder {
-        vec_x_init : SystemState::from_row_slice(2, &[
-                0.,
-                0.,
-            ]),
-        // has eigenvalues -3.5 and -1.5
-        mat_f : SystemMatrix::from_row_slice(2, 2, &[
-                -1., 1.5,
-                0.5, -2.,
-            ]),
-        mat_h : InputMatrix::from_row_slice(2, 1, &[
-                1.,
-                0.,
-            ]),
-        vec_w : SystemNoise::from_row_slice(2, &[0., 0.,]),
-        mat_c : MeasurementMatrix::from_row_slice(1, 2, &[0., 2.,]),
-        vec_r : MeasurementNoise::from_row_slice(1, &[0.]),
-        // h : MeasurementMatrix::from_row_slice(2, 2, &[0., 2., 1., 0.]),
-        // r : MeasurementNoise::from_row_slice(2, &[0., 0.]),
+use na::{DMatrix, DVector};
 
-    }.into()
-}
 
 
 #[test]
@@ -57,21 +28,25 @@ fn simple_linear_model() {
 
     let mut kf : KalmanFilter<f64> = KalmanFilterBuilder
         ::with_numstates_and_numinputs(rw.get_num_states(), rw.get_num_inputs())
-        .with_f(rw.get_f().clone())
-        .with_h(rw.get_h().clone())
-        .with_q(SystemMatrix::from_row_slice(2, 2, &[0.01, 0., 0., 0.01]))
-        .with_initial_state(SystemState::from_row_slice(2, &[0., 0.]),
-                            SystemMatrix::from_row_slice(2, 2, &[100., 0., 0., 100.]))
+        .with_system_matrix(rw.get_system_matrix().clone())
+        .with_input_matrix(rw.get_input_matrix().clone())
+        .with_system_noise_variances(nt::SystemNoiseVarianceMatrix(
+            DMatrix::from_row_slice(2, 2, &[0.01, 0., 0., 0.01])))
+        .with_initial_state(nt::StateVector(DVector::from_row_slice(2, &[0., 0.])),
+                            nt::CovarianceMatrix(
+                                DMatrix::from_row_slice(2, 2, &[100., 0., 0., 100.])))
         .into();
 
     for i in 0..steps {
         let t = i as f64 * dt;
         let u = if t <= 1. { 0. } else { 1. };
-        let u = InputVector::from_row_slice(1, &[u,]);
+        let u = nt::InputVector(DVector::from_row_slice(1, &[u,]));
         let y = rw.step(&u);
         kf.predict(&u);
-        let pred = kf.measure(y[(0, 0)], rw.get_c().row(0).clone_owned(), 0.1);
-        let diff = pred.vec_state - rw.get_state();
+        let pred = kf.measure(nt::Measurement(y.0[(0, 0)]),
+            nt::MeasurementMatrixRow( rw.get_measurement_matrix().0.row(0).clone_owned() ),
+            nt::MeasurementNoiseVariance( 0.1 ));
+        let diff = &pred.vec_state.0 - &rw.get_state().0;
 
         if helpers::max(&diff) > 0.01 {
             println!("This KalmanFilter is not good.");

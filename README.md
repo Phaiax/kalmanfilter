@@ -15,6 +15,8 @@ Vectors are represented by lowercase letters like a, matrices are written as upp
 In source code, matrices are prefixed with `mat_`, column vectors with  `vec_` and row vectors with  `rvec_`. All symbols are converted to lowercase. (Only to keep the compiler from complaining). A describing index may be
 added as well, for example `vec_v_bullet` for the vector v that describes the bullet speed.
 
+### Discrete Linear Time-Invariant Model
+
 A discrete time-invariant linear system uses the following matrix and vector letters:
 
 ```math
@@ -42,7 +44,7 @@ A discrete time-invariant linear system uses the following matrix and vector let
                      │                │                          │
                      │                ▼                          │
          ┌─────┐     ▼ x_{k+1}  ┌──────────┐    x_k    ┌─────┐   ▼
-u_k ────▶│  H  │────▶⊕─────────>│  delay   │─────┬────▶│  C  │───⊕────▶ y_k
+u_k ────▶│  H  │────▶⊕─────────▶│  delay   │─────┬────▶│  C  │───⊕────▶ y_k
          └─────┘     ▲          └──────────┘     │     └─────┘
                      │                           │
                      │             ┌─────┐       │
@@ -52,6 +54,8 @@ u_k ────▶│  H  │────▶⊕─────────>│ 
 ```
 
 Since the kalman filter estimates the system state, the measurement equation represents the available measurements (y_k), not compulsorily some other system output that has to be controlled by the controller in a later step.
+
+### Continuous Linear Time-Invariant Model
 
 For a linear model given in continuous form, the following symbols will be used:
 
@@ -81,7 +85,7 @@ For a linear model given in continuous form, the following symbols will be used:
                      │                        │                  │
                      │                        │                  │
          ┌─────┐     ▼          ┌──────────┐  ▼  x     ┌─────┐   ▼
- u  ────▶│  B  │────▶⊕─────────>│Integrator│─▶⊕──┬────▶│  C  │───⊕────▶ y
+ u  ────▶│  B  │────▶⊕─────────▶│Integrator│─▶⊕──┬────▶│  C  │───⊕────▶ y
          └─────┘     ▲          └──────────┘     │     └─────┘
                      │                           │
                      │             ┌─────┐       │
@@ -89,6 +93,8 @@ For a linear model given in continuous form, the following symbols will be used:
                                    └─────┘
 
 ```
+
+### Transformation from Continuous to Discrete Linear Time-Invariant Model
 
 Note that A and B from the continuous form can be transformed into F and H from the discrete form. The current kalman filter implementations need the discrete model, but the model in the tests can also be fed with the continuous matrices. These forms will be integrated for calculation:
 
@@ -116,3 +122,66 @@ The conversion from (A, B) to (F, H) for a certain contant timestep dt can be do
     H = H(dt) = INTEGRAL_v=0...T ( F(v) )   * B
 ```
 
+### Discrete-Time Nonlinear Time-Invariant Model
+
+The model is given through two functions called `f()` and `c()`.
+
+```math
+    f(state, input) -> state     : state function
+    c(state) -> output           : output function 
+    J_f                          : Jacobian matrix of f
+    J_c                          : Jacobian matrix of c
+
+    x_{k+1}  =  f( x_k , u_k )  +  w_k
+
+    y_{k}    =  c( x_k )        +  r_k
+```
+
+```block
+                   system                                      measurement
+                   noise           x_init                         noise
+                     │                │                             │
+                     │                ▼                             │
+                     ▼ x_{k+1}  ┌──────────┐    x_k    ┌────────┐   ▼
+                     ⊕─────────▶│  delay   │─────┬────▶│ c(x_k) │───⊕────▶ y_k
+                     ▲          └──────────┘     │     └────────┘
+                     │                           │
+                     │     ┌───────────────┐     │
+                     └─────│  f(x_k, u_k)  │◀────┘
+                           └───────────────┘
+                                   ▲
+                          u_k ─────┘
+
+```
+
+### Continuous-Time Nonlinear Time-Invariant Model
+
+The model is given through two functions called `f()` and `c()`.
+
+```math
+    f(state, input) -> state     : state function
+    c(state) -> output           : output function 
+    J_f                          : Jacobian matrix of f
+    J_c                          : Jacobian matrix of c
+
+    d/dt( x_t )  =  f( x_t , u_t )  +  w_t
+
+    y_t          =  c( x_t )        +  r_t
+```
+
+```block
+          system                                        measurement
+          noise           x_init                           noise
+            │                │                               │
+            │                ▼                               │
+            ▼          ┌────────────┐     x     ┌────────┐   ▼
+            ⊕─────────▶│ INTEGRATOR │─────┬────▶│ c(x_t) │───⊕────▶ y_k
+            ▲          └────────────┘     │     └────────┘
+            │                             │
+            │       ┌───────────────┐     │
+            └───────│  f(x_t, u_t)  │◀────┘
+                    └───────────────┘
+                          ▲
+                 u_t ─────┘
+
+```

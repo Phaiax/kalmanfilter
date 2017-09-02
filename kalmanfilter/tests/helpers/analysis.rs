@@ -1,6 +1,7 @@
 #![allow(dead_code)]
 
 use super::types::{SystemMatrix, MeasurementMatrix};
+use kalmanfilter::nt;
 use na::DMatrix;
 
 pub fn is_observable(mat_f : &SystemMatrix, mat_c : &MeasurementMatrix, eps: f64) -> bool {
@@ -12,9 +13,9 @@ pub fn is_observable2(mat_f : &SystemMatrix, mat_c : &MeasurementMatrix, eps: f6
 }
 
 fn validate(mat_f : &SystemMatrix, mat_c : &MeasurementMatrix) -> (usize, usize) {
-    let num_states = mat_f.nrows();
+    let num_states = mat_f.matrix().nrows();
     assert!(num_states >= 1);
-    assert_eq!(num_states, mat_f.ncols());
+    assert_eq!(num_states, mat_f.matrix().ncols());
     assert_eq!(num_states, mat_c.ncols());
     let num_measurements = mat_c.nrows();
     assert!(num_measurements >= 1);
@@ -47,7 +48,7 @@ pub fn kalman_observability_index(mat_f : &SystemMatrix, mat_c : &MeasurementMat
     }
 
     for i in 1..num_states {
-        sub_q *= mat_f;
+        sub_q.0 *= mat_f.matrix();
         q.rows_mut(i*num_measurements, num_measurements).copy_from(&sub_q);
 
         if (i+1) * num_measurements >= num_states {
@@ -72,14 +73,14 @@ pub fn kalman_observability_index(mat_f : &SystemMatrix, mat_c : &MeasurementMat
 ///
 pub fn hautus_observable_eigenvalues(mat_f : &SystemMatrix, mat_c : &MeasurementMatrix, eps: f64) -> Vec<f64> {
     let (num_states, num_measurements) = validate(mat_f, mat_c);
-    if let Some(eigenvalues) = mat_f.eigenvalues() {
+    if let Some(eigenvalues) = mat_f.matrix().eigenvalues() {
         let mut evm = DMatrix::zeros(num_states, num_states);
         let mut m = DMatrix::zeros(num_states + num_measurements, num_states);
         m.rows_mut(num_states, num_measurements).copy_from(&mat_c);
         let mut observable_eigenvalues = Vec::with_capacity(num_states);
         for &l in eigenvalues.iter() {
             evm.fill_diagonal(l);
-            m.rows_mut(0, num_states).copy_from( &(&evm - mat_f) );
+            m.rows_mut(0, num_states).copy_from( &(&evm - mat_f.matrix()) );
             if m.rank(eps) == num_states {
                 observable_eigenvalues.push(l);
             }
@@ -92,20 +93,20 @@ pub fn hautus_observable_eigenvalues(mat_f : &SystemMatrix, mat_c : &Measurement
 
 #[test]
 fn test_observability() {
-    let f1 = &SystemMatrix::from_row_slice(2, 2, &[2., 1., 3., 0.]);
-    let h1 = &MeasurementMatrix::from_row_slice(1, 2, &[0., 2.]);
+    let f1 = &nt::DiscreteSystemMatrix(DMatrix::from_row_slice(2, 2, &[2., 1., 3., 0.]));
+    let h1 = &MeasurementMatrix(DMatrix::from_row_slice(1, 2, &[0., 2.]));
 
-    let f2 = &SystemMatrix::from_row_slice(2, 2, &[2., 1., 3., 0.]);
-    let h2 = &MeasurementMatrix::from_row_slice(1, 2, &[1., 2.]);
+    let f2 = &nt::DiscreteSystemMatrix(DMatrix::from_row_slice(2, 2, &[2., 1., 3., 0.]));
+    let h2 = &MeasurementMatrix(DMatrix::from_row_slice(1, 2, &[1., 2.]));
 
-    let f3 = &SystemMatrix::from_row_slice(2, 2, &[2., 1., 3., 0.]);
-    let h3 = &MeasurementMatrix::from_row_slice(1, 2, &[0., 0.]);
+    let f3 = &nt::DiscreteSystemMatrix(DMatrix::from_row_slice(2, 2, &[2., 1., 3., 0.]));
+    let h3 = &MeasurementMatrix(DMatrix::from_row_slice(1, 2, &[0., 0.]));
 
-    let f4 = &SystemMatrix::from_row_slice(2, 2, &[2., 1., 3., 0.]);
-    let h4 = &MeasurementMatrix::from_row_slice(2, 2, &[0., 2., 1., 0.]);
+    let f4 = &nt::DiscreteSystemMatrix(DMatrix::from_row_slice(2, 2, &[2., 1., 3., 0.]));
+    let h4 = &MeasurementMatrix(DMatrix::from_row_slice(2, 2, &[0., 2., 1., 0.]));
 
-    let f5 = &SystemMatrix::from_row_slice(2, 2, &[2., 1., 1., 2.]);
-    let h5 = &MeasurementMatrix::from_row_slice(2, 2, &[-1., 1., 1., -1.]);
+    let f5 = &nt::DiscreteSystemMatrix(DMatrix::from_row_slice(2, 2, &[2., 1., 1., 2.]));
+    let h5 = &MeasurementMatrix(DMatrix::from_row_slice(2, 2, &[-1., 1., 1., -1.]));
 
 
     assert_eq!(Some(2), kalman_observability_index(f1, h1, 0.0001));
